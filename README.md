@@ -13,5 +13,4 @@ Game will not run in Chrome unless a) you allow access from files or b) it is lo
 or the equivalent should work. 
 
 BUGS: 
-Spawning the car obstacles does not seem to work. They should be a child of the ground sphere and randomly
-spawn along points on the road, but they just stay in their starting places :(
+Spawning the car obstacles does not seem to work. They start in their starting positions but then get rid of their scaling and their position does not stick to the sphere :( 
