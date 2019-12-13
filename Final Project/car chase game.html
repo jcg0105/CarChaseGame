@@ -1,0 +1,330 @@
+﻿<!DOCTYPE html>
+<head>
+<title>Car Chase Game</title>
+<script src="loaders/three.min.js"></script>
+<script src="loaders/GLTFLoader.js"></script>
+<script src="loaders/KeyboardState.js"></script>
+
+<script>
+	//make sure these are all being used!
+	var canvas;
+	var scene, camera, renderer;
+	var sun, sky;
+	var rollingGroundSphere;
+	var rollingSpeed = 0.01;
+	var playerSpeed;
+	var worldRadius = 25;
+	var sphericalHelper;
+	var pathAngleValues;
+	var dom;
+	var keyboard = new KeyboardState();
+
+	//GLB MODELS
+	var player;
+	var smallTruck;
+	var bigTruck;
+	var van;
+
+	var newTime = new Date().getTime();
+	var oldTime = new Date().getTime();
+
+	var obstacleTypes = [];
+	var obstacles = [];
+
+	var game = {
+		hasCollided: false,
+		finished: false,
+		points: 0, //score
+		speed: 1,
+		spawnRate: 1,
+		input: { left: false, right: false }
+	} ; 
+
+	function createWorld() { 
+		sphericalHelper = new THREE.Spherical();
+		pathAngleValues = [1.52, 1.57, 1.62];
+
+		scene = new THREE.Scene();
+		scene.fog = new THREE.FogExp2(0xf0fff0, 0.14);
+
+		//Initialize camera
+		camera = new THREE.PerspectiveCamera(75, canvas.width / canvas.height, 0.1, 1000);
+		camera.position.z = 7;
+		camera.position.y = 3;
+
+		loadObstacleTypes();
+		
+		addWorld();
+		addPlayer();
+		addLight();
+
+		document.onkeydown = handleKeyDown;
+
+	}
+
+	//in update call handleKeyDown -- maybe don't pass keybaord?
+	function handleKeyDown() {
+		keyboard.update();
+
+		//left arrow key
+		if (keyboard.pressed("left")) {
+			player.position.x -= 0.02;
+		} else if (keyboard.pressed("right") ) { 
+			player.position.x += 0.02;
+		} else if (keyboard.pressed("up")) {
+			player.position.z -= 0.02;
+		} else if (keyboard.pressed("down")) {
+			player.position.z += 0.02;
+		}
+		
+	}
+
+	function addPlayer() {
+		//load gltf file for main car
+		var loader = new THREE.GLTFLoader();
+		loader.load('models/bigTruckModel2.glb', function (gltf) {
+										player = gltf.scene;
+										player.position.y = 1;
+										player.position.z= 4;
+										player.scale.set(0.025, 0.025, 0.025);
+										player.rotation.y = Math.PI / 2;
+										scene.add(player); 
+										},
+										function (xhr) {
+											console.log((xhr.loaded/xhr.total*100) + "% loaded"); },
+										function (error) {
+											console.log("error");
+										} );
+	}
+
+	
+	function addWorld() {
+		var segments = 80;
+		var rings = 70; 
+		var sphereGeo = new THREE.SphereGeometry(worldRadius, segments, rings);
+		var texture = new THREE.TextureLoader(); 
+		roadTexture = texture.load("textures/roadTexture.jpg", function(texture) {
+			texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+			texture.offset.set(0,0.5);
+			texture.repeat.set(2, 6);
+			});
+
+		var sphereMat = new THREE.MeshPhongMaterial( {map: roadTexture} );
+
+		rollingGroundSphere = new THREE.Mesh(sphereGeo, sphereMat);
+		rollingGroundSphere.receiveShadow = true;
+		rollingGroundSphere.castShadow = false;
+		rollingGroundSphere.rotation.z = Math.PI / 2;
+		scene.add(rollingGroundSphere);
+		rollingGroundSphere.position.y = -24;
+		rollingGroundSphere.position.z = -5;
+		//addWorldBuildings();		
+	}
+
+
+
+	function addLight() {
+		var hemisphereLight = new THREE.HemisphereLight(0xfffafa, 0x000000, .9);
+		scene.add(hemisphereLight);
+		sun = new THREE.DirectionalLight(0xcdc1c5, .9);
+		sun.position.set(12, 6, -7);
+		sun.castShadow = true;
+		scene.add(sun);
+		//shadow prop
+		sun.shadow.width = 256;
+		sun.shadow.height = 256;
+		sun.shadow.camera.near = 0.5;
+		sun.shadow.camera.far = 50; 
+	}
+
+	function generateCars() {
+		newTime = new Date().getTime();
+
+		if (newTime - oldTime > 2000) {
+			oldTime = new Date().getTime();
+
+			var spawnNum = Math.round(Math.random() * 10 * game.spawnRate);
+			var spawnedObs;
+			for (var i = 0; i < spawnNum; i++) {
+				spawnedObs = obstacleTypes[Math.floor(obstacleTypes.length * Math.random())];
+				spawnedObs.position.x = -20 + Math.random() * 30;
+				spawnedObs.position.z = 0;
+				spawnedObs.scale.set(0.5, 0.5, 0.5);
+				scene.add(spawnedObs);
+				obstacles.push(spawnedObs);
+			}
+		}
+	}
+
+	function moveObstacles() {
+		for (var i = 0; i <obstacles.length; i++) {
+			obstacles[i].position.z += 0.1 * game.speed;
+			if (obstacles[i].position.z > 9) {
+				scene.remove(obstacles[i]);
+				obstacles.splice(i, 1);
+			}
+		}
+	}
+
+	function loadObstacleTypes() {
+		var loader = new THREE.GLTFLoader();
+		loader.load('models/smallTruckModel.glb', function (gltf) {
+										smallTruck = gltf.scene;
+										smallTruck.scale.set(0.7, 0.7, 0.7);
+										smallTruck.position.x = 3;
+										smallTruck.rotation.y = Math.PI;
+										obstacleTypes.push(smallTruck);
+										scene.add(smallTruck); 
+										},
+										function (xhr) {
+											console.log((xhr.loaded/xhr.total*100) + "% loaded"); },
+										function (error) {
+											console.log("error");
+										} );
+		
+		loader.load('models/bigTruckModel.glb', function (gltf) {
+										bigTruck = gltf.scene;
+										bigTruck.position.y = 0.25;
+										bigTruck.position.z= 1;
+										bigTruck.scale.set(0.05, 0.05, 0.05);
+										bigTruck.rotation.y = Math.PI / 2;
+										obstacleTypes.push(bigTruck);
+										scene.add(bigTruck); 
+										},
+										function (xhr) {
+											console.log((xhr.loaded/xhr.total*100) + "% loaded"); },
+										function (error) {
+											console.log("error");
+										} );
+		
+		loader.load('models/vanModel.glb', function (gltf) {
+										van = gltf.scene;
+										van.position.x = -3;
+										van.scale.set(0.5, 0.5, 0.5);
+										van.rotation.y = Math.PI;
+										obstacleTypes.push(van);
+										scene.add(van); 
+										},
+										function (xhr) {
+											console.log((xhr.loaded/xhr.total*100) + "% loaded"); },
+										function (error) {
+											console.log("error");
+										} );
+	}
+
+
+	/*
+	function addRoadCar() {
+		var options = [0, 1, 2];
+		var lane = Math.floor(Math.random() * 3);
+		addCar(true, lane);
+		options.splice(lane, 1);
+		if (Math.random() > 0,5) {
+			lane = Math.floor(Math.random() * 2);
+			addCar(true, options[lane]);
+		}
+	}
+
+	function addCar(inPath, row, isLeft) {
+		var newCar;
+		if (inPath) {
+			if (carsPool.length == 0) return;
+			newCar = carsPool.pop();
+			newCar.visible = true;
+			carsInPath.push(newCar);
+			sphericalHelper.set(worldRadius-0.3, pathAngleValues[row], -rollingGroundSphere.rotation.x+4);
+		} else {
+			newCar = addCar();
+			var roadAreaAngle = 0;
+			if (isLeft) {
+				roadAreaAngle = 1.68 + Math.random() * 0.1;
+			} else {
+				roadAreaAngle = 1.46 - Math.random() * 0.1;
+			}
+			sphericalHelper.set(worldRadius - 0.3, roadAreaAngle, row);
+		}
+		newCar.position.setFromSpherical(sphericalHelper);
+		var rollingGroundVector = rollingGroundSphere.position.clone().normalize();
+		var carVector = newCar.position.clone().normalize();
+		newCar.quaternion.setFromUnitVectors(carVector, rollingGroundVector);
+		newCar.rotation.x += (Math.random() * (2 * Math.PI/10)) +- Math.PI / 10;
+		rollingGroundSphere.add(newCar);
+	}
+	*/
+
+	function detectCollision() {
+		for (var i = 0; i < obstacles.length; i++) {
+			if (player.position.distanceTo(obstacles[i].position < 1) ){
+				scene.remove(obstacles[i]);
+				obstacles.splice(i, 1);
+				initiateCollision("obstacle");
+				game.finished = true;
+			}
+		}
+	}
+
+	function initiateCollision(obj) {
+		if (obj == "obstacle") {
+			console.log("Encountered an obstacle");
+		}
+		else {
+			game.points += 1;
+			var score = document.getElementById("score");
+			score.innerHTML = game.points;
+		}
+	}
+
+	function update() {
+		if (!game.finished) {
+		if (player) {
+ 			handleKeyDown(); 
+		}
+		rollingGroundSphere.rotation.x += rollingSpeed;
+		//addRoadCar();
+		generateCars();
+		moveObstacles();
+		detectCollision();
+		game.spawnRate += 0.001;
+		} else {
+			var score = document.getElementById("score");
+			score.innerHTML = "You lost! Total Score: " + game.points;
+		}
+	
+
+	}
+
+	function render() {
+	  requestAnimationFrame( render );
+	 
+	 
+	  renderer.render(scene, camera);
+	  update();
+	 }
+
+	 function init() {
+        try {
+            canvas = document.getElementById("glcanvas");
+            renderer = new THREE.WebGLRenderer( { canvas: canvas, antialias: true} );
+			renderer.setClearColor(0xfffafa, 1);
+			renderer.shadowMap.enabled = true;
+			renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        }
+        catch (e) {
+            document.getElementById("canvas-holder").innerHTML = "<h3><b>WebGL is not available.</b><h3>";
+            return;
+        }
+    
+        // create world and render scene
+        createWorld();
+        render();
+     }
+
+</script>
+
+</head>
+<body onload="init()">
+<div id="canvas-holder">
+    <canvas id="glcanvas" width="600" height="400"></canvas>
+</div>
+</body>
+</html>
